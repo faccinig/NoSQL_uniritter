@@ -1,0 +1,338 @@
+---
+title: "MongoDB"
+author: "guilherme faccini"
+date: "8 de setembro de 2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+
+if (!interactive()) {
+  knit_print.data.frame <- function(x, ...) {
+    knit_print(DT::datatable(x), ...)
+  }
+}
+```
+
+# Preparação
+
+```{bash instal_mongo, eval=FALSE, include=FALSE}
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 9DA31620334BD75D9DCB49F368818C72E52529D4
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.0.list
+sudo apt-get update
+sudo apt-get install -y mongodb-org
+```
+
+## Packages necessários
+
+```{r packages}
+library(tidyverse) # just because
+library(mongolite) # R client for mongoDB
+```
+
+
+## Inicializando mongo
+
+Inicia instancia do mongo usando a pasta `/data/`:
+
+```{r eval=FALSE, include=FALSE}
+# t <- system2("mongod --dbpath ./data/", wait = FALSE)
+# t <- system2("ls", wait = FALSE)
+
+```
+
+```{r mongo_var}
+m <- mongo("zip_code", db = "exercicio", url = "mongodb://localhost:27017")
+```
+
+## Dados
+
+### Importando
+
+```{r download_zip_data}
+zip_file <- "ZipCodeMongoDB.txt"
+if (!file.exists(zip_file)) download.file("http://bit.do/ZipCodeMongoDB",zip_file)
+
+```
+
+### Inserindo no banco de dados
+
+
+```{r import_to_mongoDB}
+m$drop()
+file <- file(zip_file)
+m$import(file)
+rm(file)
+```
+
+
+# Questões
+
+1) Qual é a população de FISHERS ISLAND?
+
+```{r q1}
+m$find('{"city":"FISHERS ISLAND"}',
+       '{"_id" : 0,"pop": 1}') %>% 
+  pull(1)
+```
+
+2) Listar todas as cidades do estado "MA".
+
+```{r q2}
+# m$distinct("city",'{"state":"MA"}')
+m$find('{"state":"MA"}',
+       '{"_id":0, "city": 1}') %>% 
+  distinct()
+```
+
+3) Listar todas as cidades com uma população entre 1 e 10 inclusive em sua população.
+
+```{r q3}
+m$aggregate('[
+            {"$match"  :{"pop":{"$gt":0}}},
+            {"$group"  :{"_id":{"state": "$state",
+                                "city": "$city" },
+                         "pop":{"$sum":"$pop"}}},
+            {"$match"  :{"pop":{"$lte":10}}},
+            {"$project":{"_id": 0,
+                         "city":"$_id.city", "state":"$_id.state",
+                         "pop":"$pop"}},
+            {"$sort":{"city":1}}
+            ]')
+```
+
+
+4) Listar todas as cidades do estado "MA" com uma população menor que 100.
+
+```{r q4}
+m$aggregate('[
+            {"$match"  :{"state":"MA"}},
+            {"$group"  :{"_id":"$city",
+                         "pop":{"$sum":"$pop"}}},
+            {"$match"  :{"pop":{"$lt":100}}},
+            {"$project":{"_id": 0,
+                         "city":"$_id", "pop":"$pop"}},
+            {"$sort":{"city":1}}
+            ]')
+```
+
+5) Listar todos os estados de forma distinta, ou seja, sem repetição. (utilize distinct)
+
+```{r q5}
+m$distinct('state')
+```
+
+6) Listar todos os estados distintos que contém uma cidade com uma população acima de 100000 .
+
+```{r q6}
+m$aggregate('[
+            {"$group"  :{"_id":{"state": "$state",
+                                "city": "$city" },
+                         "pop":{"$sum":"$pop"}}},
+            {"$match"  :{"pop":{"$gt":100000}}},
+            {"$group"  :{"_id":"$_id.state",
+                         "nro_cidades_grandes" : {"$sum":1},
+                         "maior_pop": {"$max":"$pop"}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id",
+                         "nro_cidades_grandes":"$nro_cidades_grandes",
+                         "maior_pop":"$maior_pop"}},
+            {"$sort":{"nro_cidades_grandes":-1}}
+            ]')
+```
+
+7) Qual é o tamanho da menor cidade (em população) de cada um dos estados?
+
+```{r q7}
+m$aggregate('[
+            {"$match"  :{"pop":{"$gt":0}}},
+            {"$group"  :{"_id":{"state": "$state",
+                                "city": "$city" },
+                         "pop":{"$sum":"$pop"}}},
+            {"$sort": { "pop": 1 } },
+            {"$group": {"_id": "$_id.state",
+                        "menor_city": {"$first": "$_id.city"},
+                        "pop" : {"$first": "$pop"}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id",
+                         "menor_city":"$menor_city", 
+                         "pop":"$pop"}},
+            {"$sort":{"pop":1,"menor_city":1}}
+            ]')
+```
+
+8) Qual é o nome da menor cidade (em população) de cada um dos estados? Utilize a função de redução do mapreduce do comando de agrupamento/agregação para encontrar a menor população. (Desafio)
+
+
+
+
+9) Listar o tamanho médio da população para cada um dos estados.
+
+```{r q9}
+m$aggregate('[
+            {"$match"  :{"pop":{"$gt":0}}},
+            {"$group"  :{"_id":{"state": "$state",
+                                "city": "$city" },
+                         "pop":{"$sum":"$pop"}}},
+            {"$group": {"_id": "$_id.state",
+                        "media" : {"$avg": "$pop"}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id",
+                         "media":"$media"}},
+            {"$sort":{"media":-1}}
+            ]')
+```
+
+10) Quantas cidades tem estado "WA"?
+
+```{r q10}
+m$aggregate('[
+            { "$match"  :{"state":"WA"}},
+            {"$group"  :{"_id":{"state": "$state",
+                                "city": "$city"}}},
+            {"$group": {"_id": "$_id.state",
+                        "nro_cidades" : {"$sum": 1}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id",
+                         "nro_cidades":"$nro_cidades"}}
+            ]')
+```
+
+
+
+11) Listar todos os estados e o número de cidades que eles contêm. Utilize um pipeline de agregação para desenvolver esta atividade. Aqui encontra-se uma dica: não existe um operador de `$count`, mas pode-se utilizar um `$sum:1` para fazer a mesma operação de contagem.
+
+```{r q11}
+m$aggregate('[
+            {"$group"  :{"_id":{"state": "$state",
+                                "city": "$city"}}},
+            {"$group": {"_id": "$_id.state",
+                        "nro_cidades" : {"$sum": 1}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id",
+                         "nro_cidades":"$nro_cidades"}},
+            {"$sort":{"nro_cidades":-1}}
+            ]')
+```
+
+12) Listar todos os estados com menos de 100 cidades - estenda o pipeline da questão anterior.
+
+
+```{r q12}
+m$aggregate('[
+            {"$group"  :{"_id":{"state": "$state",
+                                "city": "$city"}}},
+            {"$group": {"_id": "$_id.state",
+                        "nro_cidades" : {"$sum": 1}}},
+            {"$match": {"nro_cidades": {"$lt" : 100}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id",
+                         "nro_cidades":"$nro_cidades"}},
+            {"$sort":{"nro_cidades":-1}}
+            ]')
+```
+
+
+13) Muitas cidades são listadas mais de uma vez, mesmo que estejam no mesmo estado. Quais são as cidades que aparecem mais de 50 vezes no mesmo estado?
+
+```{r q13}
+m$aggregate('[
+            {"$group"  :{"_id":{"state": "$state",
+                                "city": "$city"},
+                        "nro_registros" : {"$sum": 1}}},
+            {"$match": {"nro_registros": {"$gt" : 50}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id.state",
+                         "city":"$_id.city",
+                         "nro_registros":"$nro_registros"}},
+            {"$sort":{"nro_registros":-1}}
+            ]')
+```
+
+14) Listar todos os nomes das cidades que aparecem em mais de vinte estados diferentes, juntamente com seus estados.
+
+```{r q14}
+m$aggregate('[
+            {"$group"  :{"_id":{"state": "$state",
+                                "city": "$city"}}},
+            {"$group"  :{"_id":{"city": "$_id.city"},
+                         "nro_registros": {"$sum":1}}},
+            {"$match": {"nro_registros": {"$gt" : 20}}},
+            {"$project":{"_id": 0,
+                         "city":"$_id.city",
+                         "nro_registros":"$nro_registros"}},
+            {"$sort":{"nro_registros":-1}}
+            ]')
+```
+
+15) Qual é a população total de todos os códigos postais agrupados individualmente de NY?
+
+```{r q15}
+m$aggregate('[
+            {"$match": {"state": "NY"}},
+            {"$group"  :{"_id":{"state": "$state"},
+                         "nro_registros": {"$sum":1},
+                         "pop": {"$sum":"$pop"}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id.state",
+                         "nro_registros":"$nro_registros",
+                         "pop":"$pop"}}
+            ]')
+            # {"$sort":{"nro_registros":-1}}
+```
+
+16) Quantos códigos postais diferentes existem no estado de NY?
+
+```{r q16}
+m$aggregate('[
+            {"$match": {"state": "NY"}},
+            {"$group"  :{"_id":{"state": "$state"},
+                         "nro_registros": {"$sum":1},
+                         "pop": {"$sum":"$pop"}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id.state",
+                         "nro_registros":"$nro_registros",
+                         "pop":"$pop"}}
+            ]')
+            # {"$sort":{"nro_registros":-1}}
+```
+
+
+17) Encontre todos os estados com uma população total acima de 10 milhões (isso requer uma soma e uma seleção) - não basta pesquisar entradas (lookup) únicas com uma população de mais de 10 milhões.
+
+```{r q17}
+            # {"$match": {"pop": {"$gt": 10000000}}},
+m$aggregate('[
+            {"$group"  :{"_id":{"state": "$state"},
+                         "nro_registros": {"$sum":1},
+                         "pop": {"$sum":"$pop"}}},
+            {"$match": {"pop": {"$gt": 10000000}}},
+            {"$project":{"_id": 0,
+                         "state":"$_id.state",
+                         "nro_registros":"$nro_registros",
+                         "pop":"$pop"}},
+            {"$sort":{"pop":-1}}
+            ]')
+```
+
+
+# Cleaning
+
+```{r }
+m$drop()
+m$disconnect()
+```
+
+
+
