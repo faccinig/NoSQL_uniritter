@@ -1,0 +1,43 @@
+---
+title: "instalação mongoDB"
+author: "guilherme faccini"
+date: "12 de setembro de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Instalação do MongoDB
+
+Seguindo instruções do site do MongoDB:  
+[https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/)
+
+Para instalar a última versão mongoDB - 4.0 - no Ubuntu xenial.
+
+
+```{bash instal_mongo, eval=FALSE, include=TRUE}
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 9DA31620334BD75D9DCB49F368818C72E52529D4
+
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.0.list
+
+sudo apt-get update
+
+sudo apt-get install -y mongodb-org
+```
+
+Inicializando o servidor usando a pasta `./data/`
+
+```{sh , eval=FALSE, include=TRUE }
+mongod --dbpath ./data/
+```
+
+ainda não intendi como executar o comando dentro do Rmarkdown
+
+```{r eval=FALSE, include=FALSE}
+# t <- system2("mongod --dbpath ./data/", wait = FALSE)
+# t <- system2("ls", wait = FALSE)
+
+```
