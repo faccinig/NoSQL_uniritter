@@ -1,6 +1,8 @@
 ---
 title: "MongoDB"
-author: "guilherme faccini"
+author: 
+  - "Guilherme Faccini"
+  - "Renato Michel"
 date: "`r format(Sys.Date(),'%d de %B de %Y')`"
 output: 
   html_document:
