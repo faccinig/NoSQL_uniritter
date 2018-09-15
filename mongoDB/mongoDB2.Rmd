@@ -34,6 +34,7 @@ if (!interactive()) {
 ## Packages necessários
 
 ```{r packages}
+library(magrittr)  # unicamente para o operador %$% 
 library(tidyverse) # just because
 library(mongolite) # R client for mongoDB
 ```
@@ -184,15 +185,28 @@ m$aggregate('[
 Qual é o nome da menor cidade (em população) de cada um dos estados? Utilize a função de redução do mapreduce do comando de agrupamento/agregação para encontrar a menor população. (Desafio)
 
 
-```{r q8, eval=FALSE, include=TRUE}
+```{r q8}
 m$mapreduce(
-  # map = "function(){emit(Math.floor(this.pop/100)*100, 1)}",
-    map = "function(){emit({state: this.state, city: this.city}, this.pop)}",
-  reduce = "function(key, pop){return Array.sum(pop)}"
-)
+  map = "function(){emit(this.state,{city:this.city,pop:this.pop})}",
+  reduce = '
+    function(key, values) {
+        var cities_all = values.map(function(it) {return it.city;});
+        var pop_all = values.map(function(it) {return it.pop;});
+        cities = cities_all.filter(function (value, index, self) {return self.indexOf(value) === index;});
+        cities = cities.map(function(it){
+            var pop = pop_all.filter(function(value, index, self) {return cities_all[index] === it;});
+            return {city: it, pop:Array.sum(pop)};
+            });
+        var minor = cities[0]
+        cities.forEach(function(item,index) {if (minor.pop > item.pop) {minor = item;} });
+        return minor;
+        }',
+  query = '{"pop":{"$gt":0}}') %$% 
+  tibble(Estado = `_id`,
+         Cidade = value$city,
+         `População` = value$pop) %>% 
+  arrange(desc(`População`))
 ```
-
-
 
 ## Q 9
 
