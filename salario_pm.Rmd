@@ -1,0 +1,69 @@
+---
+title: "Salario da Prefeitura de Porto Alegre"
+author: "Guilherme Faccini"
+date: "18 de outubro de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(tidyverse)
+```
+
+
+```{r download_function}
+download_remuneracao <- function(data,
+                                 tipo = c("MENSAL", "NATALINA","SUPLEMENTAR"),
+                                 dest_file = NULL,
+                                 ...) {
+  tipo <- match.arg(tipo)
+  data <- as.Date(data)
+  if (is.null(dest_file)) {
+    dest_file <- format(data,
+                        paste("remuneracao_pm-poa_",
+                              tipo,
+                              "%Y-%m.CSV",
+                              sep = "_"))
+  } 
+  
+  data <- format(data,"01%%2F%m%%2F%Y")
+  url <- paste0(
+    "http://",
+    "portaltransparencia.procempa.com.br/",
+    "portalTransparencia/",
+    "fpRemuneracaoRelatorio.do?perform=run&acao=CSV",
+    "&empresaSelecionada=0",
+    "&tipoFolhaSelecionada=MENSAL",
+    "&competenciaSelecionadaAsString=",data)
+  download.file(url,dest_file,...)
+  dest_file
+}
+
+```
+
+```{r}
+
+arquivos <- "2018-01-01" %>% 
+  as.Date() %>% 
+  seq.Date(length.out = 10,
+           by = "month") %>% 
+  map_chr(download_remuneracao)
+
+```
+
+```{r}
+res <- "remuneracao_pm-poa__MENSAL_2018-01.CSV" %>% 
+  # read_lines(locale = locale(encoding = "ISO-8859-2"))
+  read_csv2(locale = locale(encoding = "ISO-8859-2"),
+            skip = 2,
+            n_max = 10)
+```
+
+
+
+```{r}
+download_remuneracao("2018-01-01")
+```
+
